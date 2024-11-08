@@ -10,43 +10,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  ADMIN
-  USER
-}
-
 model User {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  name           String   @default("")
-  image          String?
-  email          String   @unique
-  password       String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  favoriteIds    String[] @db.ObjectId
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String   @default("")
+  image     String?
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isAdmin   Boolean  @default(false)
 
-  accounts     Account[]
+  reviews      Review[]
   reservations Reservation[]
-  Posts        Posts[]
-}
-
-model Account {
-  id                String  @id @default(auto()) @map("_id") @db.ObjectId
-  userId            String  @db.ObjectId
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.String
-  access_token      String? @db.String
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@unique([provider, providerAccountId])
+  favorites    Favorite[]
 }
 
 model Listing {
@@ -55,14 +31,39 @@ model Listing {
   description   String
   imageSrc      String
   createAt      DateTime @default(now())
-  category      String
+  categoryId    String   @db.ObjectId
   roomCount     Int
   bathroomCount Int
   guestCount    Int
-  location      Json
-  price         Int
+  locationValue String
+  price         Float
 
+  category     Category      @relation(fields: [categoryId], references: [id])
   reservations Reservation[]
+  reviews      Review[]
+  favorites    Favorite[]
+}
+
+model Category {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  label       String
+  description String
+  icon        String
+  createAt    DateTime @default(now())
+
+  listings Listing[] @relation
+}
+
+model Favorite {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  listingId String   @db.ObjectId
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  listing Listing @relation(fields: [listingId], references: [id])
+
+  @@unique([userId, listingId])
 }
 
 model Reservation {
@@ -73,17 +74,25 @@ model Reservation {
   endDate    DateTime
   totalPrice Int
   createdAt  DateTime @default(now())
+  status     String   @default("Confirmed")
+  refundIssued Boolean @default(false)
+  refundAmount Int?
+  paymentIntentId String?
+  
 
   user    User    @relation(fields: [userId], references: [id])
   listing Listing @relation(fields: [listingId], references: [id])
 }
 
-model Posts {
+
+model Review {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   userId    String   @db.ObjectId
-  title     String
+  rating    Int
+  listingId String   @db.ObjectId
   content   String
-  published DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+  listing Listing @relation(fields: [listingId], references: [id])
 }

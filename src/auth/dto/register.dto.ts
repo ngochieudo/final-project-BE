@@ -10,5 +10,9 @@ export class RegisterDto {
     @IsNotEmpty()
     password: string
 
+    @IsString()
+    @IsNotEmpty()
     name: string
+
+    isAdmin: boolean
 }

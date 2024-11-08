@@ -3,7 +3,7 @@ export class CreateListingsDto {
     title: string
     description: string
     imageSrc: string
-    category: string
+    categoryId: string
     roomCount: number
     bathroomCount: number
     guestCount: number

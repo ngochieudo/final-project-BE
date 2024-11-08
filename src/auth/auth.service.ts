@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthDto } from './dto/auth.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -16,63 +16,59 @@ export class AuthService {
     }
     async register(registerDto: RegisterDto) {
 
-        const hashedPassword = await argon.hash(registerDto.password)
-        try{
-            const user = await this.prismaService.user.create({
-                data: {
-                    email: registerDto.email,
-                    password: hashedPassword,
-                    name: registerDto.name,
-                },
-                select: {
-                    id: true,
-                    email: true,
-                    createdAt: true
-                }
-            })
-            return await this.signJwtToken(user.id, user.email)
-        }
-        catch(error) {
-            if(error.code == 'P2002') {
-                // throw new ForbiddenException(error.message)
-                throw new ForbiddenException('Email already exist!!')
+        const user = await this.prismaService.user.findUnique({
+            where: {
+                email: registerDto.email
             }
-            return {
-                error
+        });
+
+        if(user) throw new ConflictException('User already exist');
+
+        const createUser = await this.prismaService.user.create({
+            data: {
+                ...registerDto,
+                password: await argon.hash(registerDto.password)
+            },
+        });
+
+        const { password, ...result} = createUser;
+        return result;
+    }
+    async login(authDto: AuthDto) {
+        const user = await this.validateUser(authDto);
+        
+        const payload = {
+            sub: user.id
+        };
+
+        const jwtString = await  this.jwtService.signAsync(payload, {
+            expiresIn: '3h',
+            secret: this.configService.get('JWT_SECRET')
+        })
+        const refreshToken = await this.jwtService.signAsync(payload, {
+            expiresIn: '7d',
+            secret: this.configService.get('JWT_REFRESH_SECRET')
+        });
+
+        return {
+            user, 
+            backendTokens: {
+                accessToken: jwtString,
+                refreshToken: refreshToken
             }
         }
     }
-    async login(authDto: AuthDto) {
+
+    async validateUser(authDto: AuthDto) {
         const user = await this.prismaService.user.findUnique({
             where: {
                 email: authDto.email
             }
         })
-        if(!user) {
-            throw new ForbiddenException('User does not exist! Please check if the email is wrong')
+        if (user && (await argon.verify(user.password,authDto.password))) {
+            const { password, ...result} = user;
+            return result;
         }
-        const password = await argon.verify(
-            user.password,
-            authDto.password
-        )
-        if(!password) {
-            throw new ForbiddenException('Incorrect password!!')
-        }
-        delete user.password
-        return await this.signJwtToken(user.id, user.email)
-    }
-
-    async signJwtToken(userId: string, email: string):Promise<{accessToken: string}>{
-        const payload = {
-            sub: userId,
-            email,
-        }
-        const jwtString = await  this.jwtService.signAsync(payload, {
-            expiresIn: '20m',
-            secret: this.configService.get('JWT_SECRET')
-        })
-        return {
-            accessToken: jwtString,
-        }
+        throw new UnauthorizedException();
     }
 }
